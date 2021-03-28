@@ -1,5 +1,5 @@
-<p align="center">
-  <img src="doc/logo.png" width="125" title="zoomable-svg" alt="ZoomableSVG Logo">
+<p align="left">
+  <img src="doc/logo.png" width="400" title="zoomable-svg" alt="ZoomableSVG Logo">
 </p>
 
 # ZoomableSvg
