@@ -511,7 +511,17 @@ class ZoomableSvg extends Component {
   }
 
   render() {
-    const { svgRoot: Child, childProps, style } = this.props;
+    const { children, style } = this.props;
+
+    const transformedChildren = React.Children.forEach(children, (child) => {
+      if (React.isValidElement(child)) {
+        return React.cloneElement(child, {
+          transform: getZoomTransform(this.state),
+        });
+      }
+      return child;      
+    });
+
     return React.createElement(
       View,
       {
@@ -520,13 +530,12 @@ class ZoomableSvg extends Component {
         onWheel: this.onWheel,
         style: style,
       },
-      React.createElement(Child, {
-        transform: getZoomTransform(this.state),
-        ...childProps,
-      }),
+      transformedChildren,
     );
   }
 }
+
 ZoomableSvg.getDerivedStateFromProps = getDerivedStateFromProps;
 ZoomableSvg.default = ZoomableSvg;
+
 module.exports = ZoomableSvg;
