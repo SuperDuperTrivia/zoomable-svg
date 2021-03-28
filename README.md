@@ -1,4 +1,9 @@
+<p align="center">
+  <img src="doc/logo.png" width="125" title="zoomable-svg" alt="ZoomableSVG Logo">
+</p>
+
 # ZoomableSvg
+
 Pinch to pan-n-zoom react-native-svg components using a render prop.
 
 [Advanced Example: InfiniDraw](https://github.com/msand/InfiniDraw/)
