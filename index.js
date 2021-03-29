@@ -18,6 +18,16 @@ const { View, PanResponder, Platform } = RN;
 const { Component } = React;
 const { Svg } = RNSVG;
 
+const isMacOS = (() => {
+  if (!window || !window.navigator || typeof window.navigator.platform != 'string') {
+    return false;
+  }
+
+  return window.navigator.platform.indexOf('Mac') == 0;
+})(); 
+
+const DEFAULT_SCROLL_FACTOR = isMacOS ? 1.01 : 1.2;
+
 // Based on https://gist.github.com/evgen3188/db996abf89e2105c35091a3807b7311d
 
 function calcDistance(x1, y1, x2, y2) {
@@ -278,6 +288,8 @@ function ZoomableSvg(props) {
     top: props.top || props.initialTop || 0,
   });
 
+  const viewRef = React.useRef(null);
+
   const [zoom, setZoom] = React.useState(initialState.zoom);
   const [left, setLeft] = React.useState(initialState.left);
   const [top, setTop] = React.useState(initialState.top);
@@ -314,6 +326,23 @@ function ZoomableSvg(props) {
     isZooming,
     isMoving,
   });
+
+  // React uses passive event listener by default, in which we can't
+  // stop page scrolling at all. 
+  // Workaround: while component is mounted, disallow page scrolling, unless
+  // the prop `allowPageScrolling` is set to true.
+  if (Platform.OS == 'web') {
+    React.useEffect(() => {
+      if (props.allowPageScrolling) return;
+      const preventScroll = (event) => event.preventDefault();
+
+      // Setup onWheel-event non-passively.
+      viewRef.current.addEventListener('wheel', preventScroll, { passive: false });
+      return () => {
+        viewRef.current.removeEventListener('wheel', preventScroll);
+      }
+    }, [props.allowPageScrolling]);    
+  }
 
   const noop = () => {};
   const yes = () => true;
@@ -370,6 +399,7 @@ function ZoomableSvg(props) {
       } else {
         return;
       }
+
       e.preventDefault();
     },
     onPanResponderRelease: ({ nativeEvent: { timestamp } }, { x0, y0 }) => {
@@ -391,10 +421,9 @@ function ZoomableSvg(props) {
     setTop(top);
   };  
 
-  const onScroll = e => {
-    e.preventDefault();
+  const onWheel = e => {
     const { clientX, clientY, deltaY } = e;
-    const { wheelZoom = 1.2 } = props;
+    const { wheelZoom = DEFAULT_SCROLL_FACTOR } = props;
     const zoomAmount = deltaY > 0 ? wheelZoom : 1 / wheelZoom;
     zoomBy(zoomAmount, clientX, clientY);
   };
@@ -606,10 +635,11 @@ function ZoomableSvg(props) {
 
   return React.createElement(
     View, {
-      ..._panResponder.panHandlers,
       onMouseUp: onMouseUp,
-      onScroll: onScroll,
+      onWheel: onWheel,
       style: style,
+      ref: ref => viewRef.current = ref,
+      ..._panResponder.panHandlers,
       ...otherProps,
     },
     svgContainer,
