@@ -137,8 +137,8 @@ export default class App extends Component {
       <View style={styles.container}>
         <ZoomableSvg
           align="mid"
-          vbWidth={100}
-          vbHeight={100}
+          viewBoxWidth={100}
+          viewBoxHeight={100}
           width={width}
           height={height}
           initialTop={-20}
@@ -284,8 +284,8 @@ export default class App extends Component {
       <View style={[styles.container, styles.absfill]}>
         <ZoomableSvg
           align="mid"
-          vbWidth={100}
-          vbHeight={100}
+          viewBoxWidth={100}
+          viewBoxHeight={100}
           width={width}
           height={height}
           initialTop={0}
