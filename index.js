@@ -229,7 +229,7 @@ function nodeHasParent(node, otherNode) {
   return false;
 }
 
-function getDerivedStateFromProps(props, state) {
+function getInitialStateFromProps(props, state) {
   const {
     top,
     left,
@@ -272,7 +272,7 @@ function getZoomTransform({
 }
 
 function ZoomableSvg(props) {
-  const initialState = getDerivedStateFromProps(props, {
+  const initialState = getInitialStateFromProps(props, {
     zoom: props.zoom || props.initialZoom || 1,
     left: props.left || props.initialLeft || 0,
     top: props.top || props.initialTop || 0,
@@ -298,7 +298,7 @@ function ZoomableSvg(props) {
     initialLeft: null,
     initialZoom: null,
     initialDistance: null,
-  })
+  });
 
   // Returns full component state (compatibility layer)
   const getState = () => ({
@@ -383,6 +383,9 @@ function ZoomableSvg(props) {
   });
 
   const updateTransform = ({ zoom, left, top }) => {
+    if (isNaN(left)) {
+      // debugger;
+    }
     setZoom(zoom);
     setLeft(left);
     setTop(top);
@@ -543,7 +546,7 @@ function ZoomableSvg(props) {
       });
 
     } else {
-      const { initialX, initialY, initialLeft, initialTop, zoom } = getState();
+      const { initialX, initialY, initialLeft, initialTop } = pinchState;
       const { constrain } = props;
 
       const dx = x - initialX;
@@ -601,11 +604,6 @@ function ZoomableSvg(props) {
     transformedChildren,
   );
 
-  console.log({
-    transformedChildren,
-    svgContainer,
-  })
-
   return React.createElement(
     View, {
       ..._panResponder.panHandlers,
@@ -618,7 +616,6 @@ function ZoomableSvg(props) {
   );
 }
 
-ZoomableSvg.getDerivedStateFromProps = getDerivedStateFromProps;
 ZoomableSvg.default = ZoomableSvg;
 
 module.exports = ZoomableSvg;
