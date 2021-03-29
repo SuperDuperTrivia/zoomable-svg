@@ -12,8 +12,11 @@ if (!RN) {
   throw new Error('failed to import react-native(-web)');
 }
 
+const RNSVG = require('react-native-svg');
+
 const { View, PanResponder, Platform } = RN;
 const { Component } = React;
+const { Svg } = RNSVG;
 
 // Based on https://gist.github.com/evgen3188/db996abf89e2105c35091a3807b7311d
 
@@ -52,14 +55,19 @@ function getAlignment(align) {
   }
 }
 
-function getTransform(vbRect, eRect, align, meetOrSlice) {
+function serializeTransform(transform) {
+  return `translate(${transform.translateX} ${transform.translateY}) ` + 
+    `scale(${transform.scaleX} ${transform.scaleY})`;
+}
+
+function getTransform(viewBoxRect, eRect, align, meetOrSlice) {
   // based on https://svgwg.org/svg2-draft/coords.html#ComputingAViewportsTransform
 
   // Let vb-x, vb-y, vb-width, vb-height be the min-x, min-y, width and height values of the viewBox attribute respectively.
-  const vbX = vbRect.left || 0;
-  const vbY = vbRect.top || 0;
-  const vbWidth = vbRect.width;
-  const vbHeight = vbRect.height;
+  const vbX = viewBoxRect.left || 0;
+  const vbY = viewBoxRect.top || 0;
+  const viewBoxWidth = viewBoxRect.width;
+  const viewBoxHeight = viewBoxRect.height;
 
   // Let e-x, e-y, e-width, e-height be the position and size of the element respectively.
   const eX = eRect.left || 0;
@@ -68,10 +76,10 @@ function getTransform(vbRect, eRect, align, meetOrSlice) {
   const eHeight = eRect.height;
 
   // Initialize scale-x to e-width/vb-width.
-  let scaleX = eWidth / vbWidth;
+  let scaleX = eWidth / viewBoxWidth;
 
   // Initialize scale-y to e-height/vb-height.
-  let scaleY = eHeight / vbHeight;
+  let scaleY = eHeight / viewBoxHeight;
 
   // Initialize translate-x to e-x - (vb-x * scale-x).
   // Initialize translate-y to e-y - (vb-y * scale-y).
@@ -86,13 +94,13 @@ function getTransform(vbRect, eRect, align, meetOrSlice) {
 
     // If scale is greater than 1
     if (scale > 1) {
-      // Minus translateX by (eWidth / scale - vbWidth) / 2
-      // Minus translateY by (eHeight / scale - vbHeight) / 2
-      translateX -= (eWidth / scale - vbWidth) / 2;
-      translateY -= (eHeight / scale - vbHeight) / 2;
+      // Minus translateX by (eWidth / scale - viewBoxWidth) / 2
+      // Minus translateY by (eHeight / scale - viewBoxHeight) / 2
+      translateX -= (eWidth / scale - viewBoxWidth) / 2;
+      translateY -= (eHeight / scale - viewBoxHeight) / 2;
     } else {
-      translateX -= (eWidth - vbWidth * scale) / 2;
-      translateY -= (eHeight - vbHeight * scale) / 2;
+      translateX -= (eWidth - viewBoxWidth * scale) / 2;
+      translateY -= (eHeight - viewBoxHeight * scale) / 2;
     }
   } else {
     // If align is not 'none' and meetOrSlice is 'meet', set the larger of scale-x and scale-y to the smaller.
@@ -106,22 +114,22 @@ function getTransform(vbRect, eRect, align, meetOrSlice) {
 
     // If align contains 'xMid', add (e-width - vb-width * scale-x) / 2 to translate-x.
     if (align.includes('xMid')) {
-      translateX += (eWidth - vbWidth * scaleX) / 2;
+      translateX += (eWidth - viewBoxWidth * scaleX) / 2;
     }
 
     // If align contains 'xMax', add (e-width - vb-width * scale-x) to translate-x.
     if (align.includes('xMax')) {
-      translateX += eWidth - vbWidth * scaleX;
+      translateX += eWidth - viewBoxWidth * scaleX;
     }
 
     // If align contains 'yMid', add (e-height - vb-height * scale-y) / 2 to translate-y.
     if (align.includes('YMid')) {
-      translateY += (eHeight - vbHeight * scaleY) / 2;
+      translateY += (eHeight - viewBoxHeight * scaleY) / 2;
     }
 
     // If align contains 'yMax', add (e-height - vb-height * scale-y) to translate-y.
     if (align.includes('YMax')) {
-      translateY += eHeight - vbHeight * scaleY;
+      translateY += eHeight - viewBoxHeight * scaleY;
     }
   }
 
@@ -212,6 +220,15 @@ function getConstraints(props, viewBox) {
   }
 }
 
+function nodeHasParent(node, otherNode) {
+  while (node) {
+    if (node == otherNode) return true;
+    node = node.parentElement;
+  }
+
+  return false;
+}
+
 function getDerivedStateFromProps(props, state) {
   const {
     top,
@@ -220,14 +237,14 @@ function getDerivedStateFromProps(props, state) {
     align,
     width,
     height,
-    vbWidth,
-    vbHeight,
+    viewBoxWidth,
+    viewBoxHeight,
     meetOrSlice = 'meet',
     eRect = { width, height },
-    vbRect = { width: vbWidth || width, height: vbHeight || height },
+    viewBoxRect = { width: viewBoxWidth || width, height: viewBoxHeight || height },
   } = props;
   const { top: currTop, left: currLeft, zoom: currZoom } = state;
-  const viewBox = getTransform(vbRect, eRect, getAlignment(align), meetOrSlice);
+  const viewBox = getTransform(viewBoxRect, eRect, getAlignment(align), meetOrSlice);
   return {
     constraints: getConstraints(props, viewBox),
     top: top || currTop,
@@ -254,101 +271,144 @@ function getZoomTransform({
   };
 }
 
-class ZoomableSvg extends Component {
-  constructor(props) {
-    super();
-    this.state = getDerivedStateFromProps(props, {
-      zoom: props.initialZoom || 1,
-      left: props.initialLeft || 0,
-      top: props.initialTop || 0,
-    });
-    const noop = () => {};
-    const yes = () => true;
-    const shouldRespond = (evt, { dx, dy }) => {
-      const { moveThreshold = 5, doubleTapThreshold, lock } = this.props;
-      return (
-        !lock &&
-        (evt.nativeEvent.touches.length === 2 ||
-          dx * dx + dy * dy >= moveThreshold ||
-          doubleTapThreshold)
-      );
-    };
-    let lastRelease = 0;
-    const checkDoubleTap = (timestamp, x, y, shift) => {
-      const { doubleTapThreshold, doubleTapZoom = 2 } = this.props;
-      if (doubleTapThreshold && timestamp - lastRelease < doubleTapThreshold) {
-        this.zoomBy(shift ? 1 / doubleTapZoom : doubleTapZoom, x, y);
+function ZoomableSvg(props) {
+  const initialState = getDerivedStateFromProps(props, {
+    zoom: props.zoom || props.initialZoom || 1,
+    left: props.left || props.initialLeft || 0,
+    top: props.top || props.initialTop || 0,
+  });
+
+  const [zoom, setZoom] = React.useState(initialState.zoom);
+  const [left, setLeft] = React.useState(initialState.left);
+  const [top, setTop] = React.useState(initialState.top);
+  const [constraints, setConstraints] = React.useState(initialState.constraints);
+  const [translateX, setTranslateX] = React.useState(initialState.translateX);
+  const [translateY, setTranslateY] = React.useState(initialState.translateY);
+  const [scaleX, setScaleX] = React.useState(initialState.scaleX);
+  const [scaleY, setScaleY] = React.useState(initialState.scaleY);
+  const [eRect, setERect] = React.useState(initialState.eRect);
+
+  const [isZooming, setIsZooming] = React.useState(false);
+  const [isMoving, setIsMoving] = React.useState(false);
+
+  const [pinchState, setPinchState] = React.useState({
+    initialX: null,
+    initialY: null,
+    initialTop: null,
+    initialLeft: null,
+    initialZoom: null,
+    initialDistance: null,
+  })
+
+  // Returns full component state (compatibility layer)
+  const getState = () => ({
+    zoom,
+    left,
+    top,
+    constraints,
+    translateX,
+    translateY,
+    scaleX,
+    scaleY,
+    eRect,
+    isZooming,
+    isMoving,
+  });
+
+  const noop = () => {};
+  const yes = () => true;
+  const shouldRespond = (evt, { dx, dy }) => {
+    const { moveThreshold = 5, doubleTapThreshold, lock } = props;
+    return (
+      !lock &&
+      (evt.nativeEvent.touches.length === 2 ||
+        dx * dx + dy * dy >= moveThreshold ||
+        doubleTapThreshold)
+    );
+  };
+
+  let lastRelease = 0;
+
+  const checkDoubleTap = (timestamp, x, y, shift) => {
+    const { doubleTapThreshold, doubleTapZoom = 2 } = props;
+    if (doubleTapThreshold && timestamp - lastRelease < doubleTapThreshold) {
+      zoomBy(shift ? 1 / doubleTapZoom : doubleTapZoom, x, y);
+    }
+    lastRelease = timestamp;
+  };
+
+  const onMouseUp = ({
+    clientX,
+    clientY,
+    nativeEvent: { timeStamp, shiftKey },
+  }) => {
+    checkDoubleTap(timeStamp, clientX, clientY, shiftKey);
+  };
+  const _panResponder = PanResponder.create({
+    onPanResponderGrant: noop,
+    onPanResponderTerminate: noop,
+    onShouldBlockNativeResponder: yes,
+    onPanResponderTerminationRequest: yes,
+    onMoveShouldSetPanResponder: shouldRespond,
+    onStartShouldSetPanResponder: shouldRespond,
+    onMoveShouldSetPanResponderCapture: shouldRespond,
+    onStartShouldSetPanResponderCapture: shouldRespond,
+    onPanResponderMove: e => {
+      const { nativeEvent: { touches } } = e;
+      const { length } = touches;
+      if (length === 1) {
+        const [{ pageX, pageY }] = touches;
+        processTouch(pageX, pageY);
+      } else if (length === 2) {
+        const [touch1, touch2] = touches;
+        processPinch(
+          touch1.pageX,
+          touch1.pageY,
+          touch2.pageX,
+          touch2.pageY,
+        );
+      } else {
+        return;
       }
-      lastRelease = timestamp;
-    };
-    this.onMouseUp = ({
-      clientX,
-      clientY,
-      nativeEvent: { timeStamp, shiftKey },
-    }) => {
-      checkDoubleTap(timeStamp, clientX, clientY, shiftKey);
-    };
-    this._panResponder = PanResponder.create({
-      onPanResponderGrant: noop,
-      onPanResponderTerminate: noop,
-      onShouldBlockNativeResponder: yes,
-      onPanResponderTerminationRequest: yes,
-      onMoveShouldSetPanResponder: shouldRespond,
-      onStartShouldSetPanResponder: shouldRespond,
-      onMoveShouldSetPanResponderCapture: shouldRespond,
-      onStartShouldSetPanResponderCapture: shouldRespond,
-      onPanResponderMove: e => {
-        const { nativeEvent: { touches } } = e;
-        const { length } = touches;
-        if (length === 1) {
-          const [{ pageX, pageY }] = touches;
-          this.processTouch(pageX, pageY);
-        } else if (length === 2) {
-          const [touch1, touch2] = touches;
-          this.processPinch(
-            touch1.pageX,
-            touch1.pageY,
-            touch2.pageX,
-            touch2.pageY,
-          );
-        } else {
-          return;
-        }
-        e.preventDefault();
-      },
-      onPanResponderRelease: ({ nativeEvent: { timestamp } }, { x0, y0 }) => {
-        if (Platform.OS !== 'web') {
-          checkDoubleTap(timestamp, x0, y0);
-        }
-        this.setState({
-          isZooming: false,
-          isMoving: false,
-        });
-      },
-    });
-
-    this.onWheel = e => {
       e.preventDefault();
-      const { clientX, clientY, deltaY } = e;
-      const { wheelZoom = 1.2 } = this.props;
-      const zoomAmount = deltaY > 0 ? wheelZoom : 1 / wheelZoom;
-      this.zoomBy(zoomAmount, clientX, clientY);
+    },
+    onPanResponderRelease: ({ nativeEvent: { timestamp } }, { x0, y0 }) => {
+      if (Platform.OS !== 'web') {
+        checkDoubleTap(timestamp, x0, y0);
+      }
+
+      setIsZooming(false);
+      setIsMoving(false);
+    },
+  });
+
+  const updateTransform = ({ zoom, left, top }) => {
+    setZoom(zoom);
+    setLeft(left);
+    setTop(top);
+  };  
+
+  const onScroll = e => {
+    e.preventDefault();
+    const { clientX, clientY, deltaY } = e;
+    const { wheelZoom = 1.2 } = props;
+    const zoomAmount = deltaY > 0 ? wheelZoom : 1 / wheelZoom;
+    zoomBy(zoomAmount, clientX, clientY);
+  };
+
+  const reset = (zoom = 1, left = 0, top = 0) => {
+    const nextState = {
+      zoom,
+      left,
+      top,
     };
 
-    this.reset = (zoom = 1, left = 0, top = 0) => {
-      const nextState = {
-        zoom,
-        left,
-        top,
-      };
+    updateTransform(
+      props.constrain ? constrainExtent(nextState) : nextState
+    );
+  };
 
-      this.setState(
-        this.props.constrain ? this.constrainExtent(nextState) : nextState,
-      );
-    };
-  }
-
-  constrainExtent({ zoom, left, top }) {
+  const constrainExtent = ({ zoom, left, top }) => {
     // Based on https://github.com/d3/d3-zoom/blob/3bd2bddd87d79bb5fc3984cfb59e36ebd1686dcf/src/zoom.js
     // Width and height of canvas in native device
     const {
@@ -358,12 +418,12 @@ class ZoomableSvg extends Component {
         scaleExtent: [minZoom, maxZoom],
         translateExtent: [min, max],
       },
-    } = this.state;
+    } = getState();
 
     const constrainedZoom = Math.max(minZoom, Math.min(maxZoom, zoom));
 
     const { translateX, translateY, scaleX, scaleY } = getZoomTransform({
-      ...this.state,
+      ...getState(),
       zoom: constrainedZoom,
       left,
       top,
@@ -415,16 +475,19 @@ class ZoomableSvg extends Component {
       left: left + (vl - x) * scaleX,
       top: top + (vt - y) * scaleY,
     };
-  }
+  };
 
-  processPinch(x1, y1, x2, y2) {
+  const processPinch = (x1, y1, x2, y2) => {
     const distance = calcDistance(x1, y1, x2, y2);
     const { x, y } = calcCenter(x1, y1, x2, y2);
 
-    if (!this.state.isZooming) {
-      const { top, left, zoom } = this.state;
-      this.setState({
-        isZooming: true,
+    if (!isZooming) {
+      const { top, left, zoom } = getState();
+
+      setIsZooming(true);
+
+      setPinchState({
+        ...pinchState,
         initialX: x,
         initialY: y,
         initialTop: top,
@@ -432,6 +495,7 @@ class ZoomableSvg extends Component {
         initialZoom: zoom,
         initialDistance: distance,
       });
+
     } else {
       const {
         initialX,
@@ -440,8 +504,9 @@ class ZoomableSvg extends Component {
         initialLeft,
         initialZoom,
         initialDistance,
-      } = this.state;
-      const { constrain } = this.props;
+      } = pinchState;
+
+      const { constrain } = props;
 
       const touchZoom = distance / initialDistance;
       const dx = x - initialX;
@@ -457,24 +522,29 @@ class ZoomableSvg extends Component {
         top,
       };
 
-      this.setState(constrain ? this.constrainExtent(nextState) : nextState);
+      const constrainedNextState = constrain ? constrainExtent(nextState) : nextState;
+      updateTransform(constrainedNextState);
     }
-  }
+  };
 
-  processTouch(x, y) {
-    if (!this.state.isMoving || this.state.isZooming) {
-      const { top, left } = this.state;
-      this.setState({
-        isMoving: true,
-        isZooming: false,
+  const processTouch = (x, y) => {
+    if (!isMoving || isZooming) {
+      const { top, left } = getState();
+
+      setIsMoving(true);
+      setIsZooming(false);
+
+      setPinchState({
+        ...pinchState,
         initialLeft: left,
         initialTop: top,
         initialX: x,
-        initialY: y,
+        initialY: y,        
       });
+
     } else {
-      const { initialX, initialY, initialLeft, initialTop, zoom } = this.state;
-      const { constrain } = this.props;
+      const { initialX, initialY, initialLeft, initialTop, zoom } = getState();
+      const { constrain } = props;
 
       const dx = x - initialX;
       const dy = y - initialY;
@@ -485,17 +555,18 @@ class ZoomableSvg extends Component {
         zoom,
       };
 
-      this.setState(constrain ? this.constrainExtent(nextState) : nextState);
+      const constrainedNextState = constrain ? constrainExtent(nextState) : nextState;
+      updateTransform(constrainedNextState);
     }
-  }
+  };
 
-  zoomBy(dz, x, y) {
+  const zoomBy = (dz, x, y) => {
     const {
       top: initialTop,
       left: initialLeft,
       zoom: initialZoom,
-    } = this.state;
-    const { constrain } = this.props;
+    } = getState();
+    const { constrain } = props;
 
     const left = (initialLeft - x) * dz + x;
     const top = (initialTop - y) * dz + y;
@@ -507,32 +578,44 @@ class ZoomableSvg extends Component {
       top,
     };
 
-    this.setState(constrain ? this.constrainExtent(nextState) : nextState);
-  }
+    const constrainedNextState = constrain ? constrainExtent(nextState) : nextState;
+    updateTransform(constrainedNextState);
+  };
 
-  render() {
-    const { children, style } = this.props;
+  const { children, width, height, style, ...otherProps } = props;
 
-    const transformedChildren = React.Children.forEach(children, (child) => {
-      if (React.isValidElement(child)) {
-        return React.cloneElement(child, {
-          transform: getZoomTransform(this.state),
-        });
-      }
-      return child;      
-    });
+  const transformedChildren = React.Children.map(children, (child) => {
+    if (React.isValidElement(child)) {
+      return React.cloneElement(child, {
+        transform: serializeTransform(getZoomTransform(getState())),
+      });
+    }
+    return child;      
+  });
 
-    return React.createElement(
-      View,
-      {
-        ...this._panResponder.panHandlers,
-        onMouseUp: this.onMouseUp,
-        onWheel: this.onWheel,
-        style: style,
-      },
-      transformedChildren,
-    );
-  }
+  const svgContainer = React.createElement(
+    Svg, {
+      width: width,
+      height: height,
+    },
+    transformedChildren,
+  );
+
+  console.log({
+    transformedChildren,
+    svgContainer,
+  })
+
+  return React.createElement(
+    View, {
+      ..._panResponder.panHandlers,
+      onMouseUp: onMouseUp,
+      onScroll: onScroll,
+      style: style,
+      ...otherProps,
+    },
+    svgContainer,
+  );
 }
 
 ZoomableSvg.getDerivedStateFromProps = getDerivedStateFromProps;
