@@ -543,14 +543,15 @@ function ZoomableSvg(props) {
       const dx = x - initialX;
       const dy = y - initialY;
 
-      const left = (initialLeft + dx - x) * touchZoom + x;
-      const top = (initialTop + dy - y) * touchZoom + y;
-      const zoom = initialZoom * touchZoom;
+      const constrainedTouchZoom = getConstrainedDelta(touchZoom, initialZoom);
+      const newZoom = initialZoom * constrainedTouchZoom;
+      const left = (initialLeft + dx - x) * constrainedTouchZoom + x;
+      const top = (initialTop + dy - y) * constrainedTouchZoom + y;
 
       const nextState = {
-        zoom,
-        left,
-        top,
+        zoom: newZoom,
+        left: left,
+        top: top,
       };
 
       const constrainedNextState = constrain ? constrainExtent(nextState) : nextState;
@@ -591,17 +592,48 @@ function ZoomableSvg(props) {
     }
   };
 
-  const zoomBy = (dz, x, y) => {
+  // Used to constrain the zooming-in.
+  // If we just constrained the zoom, top/left values would
+  // still be increased when trying to pinch/scroll further.
+  // This method will prevent further translates when trying to
+  // zoom further than maxZoom/minZoom by returning the max possible
+  // value for dz.
+  const getConstrainedDelta = (dz, initialZoom) => {
+    const {
+      constraints: {
+        scaleExtent: [minZoom, maxZoom],
+      },      
+    } = getState();
+
+    if (!props.constrain) {
+      return dz;
+    }
+
+    const newZoom = initialZoom * dz;
+
+    if (newZoom <= minZoom) {
+      return minZoom / initialZoom;
+    } else if (newZoom >= maxZoom) {
+      return maxZoom / initialZoom;
+    }
+
+    return dz;
+  };
+
+  const zoomBy = (dzIn, x, y) => {
     const {
       top: initialTop,
       left: initialLeft,
-      zoom: initialZoom,
+      zoom: initialZoom,   
     } = getState();
-    const { constrain } = props;
 
+    const { constrain, constrainZoom } = props;
+
+    // Calculate new zoom value
+    dz = getConstrainedDelta(dzIn, initialZoom);
+    const zoom = initialZoom * dz;
     const left = (initialLeft - x) * dz + x;
     const top = (initialTop - y) * dz + y;
-    const zoom = initialZoom * dz;
 
     const nextState = {
       zoom,
