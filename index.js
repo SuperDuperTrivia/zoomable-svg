@@ -26,7 +26,7 @@ const isMacOS = (() => {
   return window.navigator.platform.indexOf('Mac') == 0;
 })(); 
 
-const DEFAULT_SCROLL_FACTOR = isMacOS ? 1.01 : 1.2;
+const DEFAULT_SCROLL_FACTOR = isMacOS ? 1.03 : 1.2;
 
 // Based on https://gist.github.com/evgen3188/db996abf89e2105c35091a3807b7311d
 
