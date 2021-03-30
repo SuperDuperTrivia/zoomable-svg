@@ -412,10 +412,9 @@ function ZoomableSvg(props) {
     },
   });
 
-  const updateTransform = ({ zoom, left, top }) => {
-    if (isNaN(left)) {
-      // debugger;
-    }
+  const updateTransform = (input) => {
+    if (input == null) return;
+    const { zoom, left, top } = input;
     setZoom(zoom);
     setLeft(left);
     setTop(top);
