@@ -337,9 +337,15 @@ const ZoomableSvg = React.forwardRef((props, zoomableSvgRef) => {
       const preventScroll = (event) => event.preventDefault();
 
       // Setup onWheel-event non-passively.
-      viewRef.current.addEventListener('wheel', preventScroll, { passive: false });
+      let removeListener;
+
+      if (viewRef && viewRef.current) {
+        viewRef.current.addEventListener('wheel', preventScroll, { passive: false });
+        removeListener = viewRef.current.removeEventListener;
+      } 
+
       return () => {
-        viewRef.current.removeEventListener('wheel', preventScroll);
+        removeListener && removeListener('wheel', preventScroll);
       }
     }, [props.allowPageScrolling]);    
   }
@@ -665,7 +671,7 @@ const ZoomableSvg = React.forwardRef((props, zoomableSvgRef) => {
     updateTransform(constrainedNextState);
   };
 
-  const { children, width, height, style, ...otherProps } = props;
+  const { children, width, height, style, svgProps, ...otherProps } = props;
 
   const transformedChildren = React.Children.map(children, (child) => {
     if (React.isValidElement(child)) {
@@ -680,6 +686,7 @@ const ZoomableSvg = React.forwardRef((props, zoomableSvgRef) => {
     Svg, {
       width: width,
       height: height,
+      ...svgProps,
     },
     transformedChildren,
   );
