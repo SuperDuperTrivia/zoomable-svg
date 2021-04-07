@@ -281,7 +281,7 @@ function getZoomTransform({
   };
 }
 
-function ZoomableSvg(props) {
+const ZoomableSvg = React.forwardRef((props, zoomableSvgRef) => {
   const initialState = getInitialStateFromProps(props, {
     zoom: props.zoom || props.initialZoom || 1,
     left: props.left || props.initialLeft || 0,
@@ -344,6 +344,25 @@ function ZoomableSvg(props) {
     }, [props.allowPageScrolling]);    
   }
 
+  const zoomIn = () => {
+    const { doubleTapZoom = 1.3 } = props;
+    const { width, height } = viewRef.current.measure((x, y, width, height) => {
+      zoomBy(doubleTapZoom, width / 2, height / 2);
+    });    
+  };
+
+  const zoomOut = () => {
+    const { doubleTapZoom = 1.3 } = props;
+    const { width, height } = viewRef.current.measure((x, y, width, height) => {
+      zoomBy(1 / doubleTapZoom, width / 2, height / 2);
+    });
+  };
+
+  React.useImperativeHandle(zoomableSvgRef, () => ({
+    zoomIn,
+    zoomOut,
+  }));
+
   const noop = () => {};
   const yes = () => true;
   const shouldRespond = (evt, { dx, dy }) => {
@@ -373,6 +392,7 @@ function ZoomableSvg(props) {
   }) => {
     checkDoubleTap(timeStamp, clientX, clientY, shiftKey);
   };
+
   const _panResponder = PanResponder.create({
     onPanResponderGrant: noop,
     onPanResponderTerminate: noop,
@@ -675,7 +695,7 @@ function ZoomableSvg(props) {
     },
     svgContainer,
   );
-}
+});
 
 ZoomableSvg.default = ZoomableSvg;
 
