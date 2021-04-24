@@ -417,10 +417,10 @@ const ZoomableSvg = React.forwardRef((props, zoomableSvgRef) => {
       } else if (length === 2) {
         const [touch1, touch2] = touches;
         processPinch(
-          touch1.pageX,
-          touch1.pageY,
-          touch2.pageX,
-          touch2.pageY,
+          touch1.locationX || touch1.clientX || touch1.pageX,
+          touch1.locationY || touch1.clientY || touch1.pageY,
+          touch2.locationX || touch2.clientX || touch2.pageX,
+          touch2.locationY || touch2.clientY || touch2.pageY,
         );
       } else {
         return;
@@ -447,7 +447,14 @@ const ZoomableSvg = React.forwardRef((props, zoomableSvgRef) => {
   };  
 
   const onWheel = e => {
-    const { clientX, clientY, deltaY } = e;
+    let { clientX, clientY, deltaY } = e;
+
+    if (e.nativeEvent) {
+      // Use layer coordinates.
+      clientX = e.nativeEvent.layerX;
+      clientY = e.nativeEvent.layerY;
+    }
+
     const { wheelZoom = DEFAULT_SCROLL_FACTOR } = props;
     const zoomAmount = deltaY > 0 ? wheelZoom : 1 / wheelZoom;
     zoomBy(zoomAmount, clientX, clientY);
