@@ -371,6 +371,7 @@ const ZoomableSvg = React.forwardRef((props, zoomableSvgRef) => {
 
   const noop = () => {};
   const yes = () => true;
+  const no = () => false;
   const shouldRespond = (evt, { dx, dy }) => {
     const { moveThreshold = 5, doubleTapThreshold, lock } = props;
     return (
@@ -403,7 +404,7 @@ const ZoomableSvg = React.forwardRef((props, zoomableSvgRef) => {
     onPanResponderGrant: noop,
     onPanResponderTerminate: noop,
     onShouldBlockNativeResponder: yes,
-    onPanResponderTerminationRequest: yes,
+    onPanResponderTerminationRequest: no,
     onMoveShouldSetPanResponder: shouldRespond,
     onStartShouldSetPanResponder: shouldRespond,
     onMoveShouldSetPanResponderCapture: shouldRespond,
