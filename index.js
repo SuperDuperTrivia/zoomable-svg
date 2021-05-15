@@ -282,6 +282,11 @@ function getZoomTransform({
 }
 
 const ZoomableSvg = React.forwardRef((props, zoomableSvgRef) => {
+  const {
+    onLockScrollView,
+    onUnlockScrollView,
+  } = props;
+
   const initialState = getInitialStateFromProps(props, {
     zoom: props.zoom || props.initialZoom || 1,
     left: props.left || props.initialLeft || 0,
@@ -372,14 +377,25 @@ const ZoomableSvg = React.forwardRef((props, zoomableSvgRef) => {
   const noop = () => {};
   const yes = () => true;
   const no = () => false;
+
+  const stopPropagation = (callback) => {
+    return (evt, gestureState) => {
+      evt.stopPropagation();
+      if (callback) {
+        return callback(evt, gestureState);
+      }
+    };
+  }
+
   const shouldRespond = (evt, { dx, dy }) => {
     const { moveThreshold = 5, doubleTapThreshold, lock } = props;
-    return (
+    const retVal = (
       !lock &&
       (evt.nativeEvent.touches.length === 2 ||
         dx * dx + dy * dy >= moveThreshold ||
         doubleTapThreshold)
     );
+    return retVal;
   };
 
   let lastRelease = 0;
@@ -401,8 +417,10 @@ const ZoomableSvg = React.forwardRef((props, zoomableSvgRef) => {
   };
 
   const _panResponder = PanResponder.create({
-    onPanResponderGrant: noop,
-    onPanResponderTerminate: noop,
+    onPanResponderGrant: (e) => {
+      onLockScrollView && onLockScrollView();
+    },
+    onPanResponderTerminate: no,
     onShouldBlockNativeResponder: yes,
     onPanResponderTerminationRequest: no,
     onMoveShouldSetPanResponder: shouldRespond,
@@ -412,9 +430,11 @@ const ZoomableSvg = React.forwardRef((props, zoomableSvgRef) => {
     onPanResponderMove: e => {
       const { nativeEvent: { touches } } = e;
       const { length } = touches;
+
       if (length === 1) {
         const [{ pageX, pageY }] = touches;
         processTouch(pageX, pageY);
+
       } else if (length === 2) {
         const [touch1, touch2] = touches;
         processPinch(
@@ -427,9 +447,11 @@ const ZoomableSvg = React.forwardRef((props, zoomableSvgRef) => {
         return;
       }
 
-      e.preventDefault();
+      e.stopPropagation();
     },
     onPanResponderRelease: ({ nativeEvent: { timestamp } }, { x0, y0 }) => {
+      onUnlockScrollView && onUnlockScrollView();
+
       if (Platform.OS !== 'web') {
         checkDoubleTap(timestamp, x0, y0);
       }
